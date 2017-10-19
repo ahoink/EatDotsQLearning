@@ -5,7 +5,7 @@ A simple implementation of q-learning in python
 
 A blue circle learns to navigate a field to eat green dots and avoid red dots. The learning process involves q-learning, an off-policy reinforcement learning algorithm based on states and actions. 
 
-The blue circle is the q-learning agent. The agent has five "eyes" angle 15 degrees from each other and thus can see in five directions. The eyes can detect three things (or nothing): green dots, red dots, and the edges of the field. With five eyes that can see four different things (including nothing), there are total of 20 possible states the agent can be in.
+The blue circle is the q-learning agent. The agent has five "eyes" angle 15 degrees from each other and thus can see in five directions. The eyes can detect three things (or nothing): green dots, red dots, and the edges of the field. With five eyes that can see four different things (including nothing), there are total of 4^5, or 1024, possible states the agent can be in.
 
 The agent can perform five different actions: move straight forward, turn a little to the left and move forward, turn a little to the right and move forward, turn more to the left and move forward a little, or turn more to the right and move forward a little.
 

@@ -7,6 +7,8 @@ import math
 import argparse
 
 def create_world():
+# Generates 50 dots to be "randomly" placed on the field
+
 	dots = []
 	for i in range(50):
 		x, y = genRandPt(dots)
@@ -18,6 +20,9 @@ def create_world():
 	return dots
 
 def genRandPt(dots):
+# Generates a random point but returns (-1, -1) if the random point is too close
+# to an existing dot
+
 	# 0.015  is radius of dot
 	x = random.uniform(0.015, ax.get_xlim()[1] - 0.015)
 	y = random.uniform(0.015, ax.get_ylim()[1] - 0.015)
@@ -29,6 +34,8 @@ def genRandPt(dots):
 	return x, y
 
 def create_dot(x, y):
+# Creates a dot at a specified point with a 60% chance of being green
+
 	if random.random() < 0.6:
 		color = 'green'
 	else:
@@ -37,6 +44,8 @@ def create_dot(x, y):
 	return dot
 
 def dotDetected():
+# Finds what objects each eye can see but only returns the closest ones
+# 0 = nothing, 1 = green dot, 2 = red dot, 3 = edge
 	dist = [99] * agent.numEyes
 	detected = [0] * agent.numEyes
 	wall = agent.nearEdge()
@@ -57,6 +66,8 @@ def dotDetected():
 	return detected
 
 def distToWall(eye):
+# Finds distance to edge of field since eyes can see beyond the edges
+
 	if eye[1] < 0:
 		angle = math.asin(min(abs(eye[1] - eye[0]) / agent.viewDist, 1))
 		if angle == 0:
@@ -86,11 +97,17 @@ def distToWall(eye):
 	return dist
 	
 def pt2ptDist(x1, y1, x2, y2, radius1, radius2):
+# Distance between agent and dot
+
 	dist = math.sqrt(math.pow(x2-x1, 2) + math.pow(y2-y1, 2))
 	dist = dist - radius1 - radius2
 	return dist
 
 def eyeSeeDot(dot, eye):
+# Determines if an eye can "see" a dot by checking if line segment intersects a circle
+# Finds distance from a point (center of dot) to line segment
+# then checks if distance is less than the radius of the dot
+
 	A = dot.center[0] - eye[0]
 	B = dot.center[1] - eye[2]
 	C = eye[1] - eye[0]
@@ -118,6 +135,9 @@ def eyeSeeDot(dot, eye):
 	
 
 def dotAbsorbed():
+# Checks if agent (circle) contains the point at the center of a dot
+# Dots are NOT eaten if the two circles simply overlap, it must engulf the center of the dot
+
 	absorbed = []
 	for i, dot in enumerate(dots):
 		if (agent.center[0] - agent.circle.radius < dot.center[0] < agent.center[0] + agent.circle.radius) and (agent.center[1] - agent.circle.radius < dot.center[1] < agent.center[1] + agent.circle.radius):
@@ -137,47 +157,50 @@ def smoothTurn(angle, delay):
 	agent.turn(float(angle) / 2)
 
 def train(delay, iters):
+# Learn based on rewards from states and actions
+
 	detected = dotDetected()
 	lastState = None
 	lastAction = None
 	reward = 0.0
-	score = 0
-	age = 0
-	dotsCollected = [0]*5000
+	score = 0					# Overall rewards
+	age = 0						# Age is number of iterations (actions)
+	dotsCollected = [0]*5000			# Only track last 5000 iterations
 	greenCollected = [0]*5000
 	prevAtEdge = False
-		
+
+	# Train for specific number of iterations
 	while age < iters:
-		state = tuple(detected)		# + (agent.nearEdge(),)
+		state = tuple(detected)				# State is tuple of what every eye sees
 		action = agent.chooseAction(state)
 		reward = 0
 
-		if action == 0:
-			if not agent.atEdge():
+		if action == 0:					# Move straight forward
+			if not agent.atEdge():			# Only if we're not at an edge
 				agent.move(0.025)
 				if agent.nearEdge():
-					reward -= 0.1
+					reward -= 0.1		# Decrease reward if close to edge
 				else:			
-					reward += 0.5
+					reward += 0.5		# Otherwise increase reward
 					if prevAtEdge:
-						reward += 0.25
+						reward += 0.25	# Bonus reward for moving away from edge
 				prevAtEdge = False
 			else:
 				prevAtEdge = True
 				reward -= 1.0
-		elif action == 1:
+		elif action == 1:				# Turn 15 deg CCW then forward
 			agent.turn(15)
 			if not agent.atEdge():
 				agent.move(0.025)
-		elif action == 2:
+		elif action == 2:				# Turn 15 deg CW then forward
 			agent.turn(-15)
 			if not agent.atEdge():
 				agent.move(0.025)
-		elif action == 3:
+		elif action == 3:				# Turn 30 deg CCW then forward a little
 			agent.turn(30)
 			if not agent.atEdge():
 				agent.move(0.01)
-		elif action == 4:
+		elif action == 4:				# Turn 30 deg CW then forward a little
 			agent.turn(-30)
 			if not agent.atEdge():
 				agent.move(0.01)
@@ -187,11 +210,11 @@ def train(delay, iters):
 		greenCollected[age%5000] = 0
 		for dot in absorbed:
 			if (dots[dot].get_facecolor()[0] == 1.0):
-				reward += -6.0
+				reward += -6.0			# Penalized for eating red
 			else:
-				reward += 5.0
+				reward += 5.0			# Rewarded for eating green
 				greenCollected[age%5000] += 1
-			x, y = genRandPt(dots)
+			x, y = genRandPt(dots)			# Relocate absorbed dot
 			while x == y == -1:
 				x, y = genRandPt(dots)
 
@@ -200,25 +223,28 @@ def train(delay, iters):
 			dotsCollected[age%5000] += 1
 		
 		detected = dotDetected()
-	
+
+		# Change color of eyes depending on what they see
 		for i in range(agent.numEyes):
-			if detected[i] == 0:
+			if detected[i] == 0:				# nothing
 				agent.eyesPlot[i].set_color('black')
-			elif detected[i] == 1:
+			elif detected[i] == 1:				# green dot
 				agent.eyesPlot[i].set_color('green')
-			elif detected[i] == 2:
+			elif detected[i] == 2:				# red dot
 				agent.eyesPlot[i].set_color('red')
-			elif detected[i] == 3:
+			elif detected[i] == 3:				# edge
 				agent.eyesPlot[i].set_color('yellow')
 
 		fig.canvas.draw()
 		plt.pause(delay)
 	
+		# Learn based on last state/action, reward received, and current state
 		if lastState is not None:
 			agent.learn(lastState, lastAction, reward, state)
 		lastState = state
 		lastAction = action
-	
+
+		# Relocate dots that have been sitting in place for too long
 		for i in range(len(dotAges)):
 			if dotAges[i] > 2500 and age % 100 == 0 and random.random() < 0.05:
 				x, y = genRandPt(dots)
@@ -245,40 +271,43 @@ def train(delay, iters):
 
 	agent.saveQ()
 
-
 def play(delay):
+# No training or learning
+
 	detected = dotDetected()
-	age = 0
+	age = 0						# Age is number of iterations (actions)
 	dotsCollected = 0
 	greenCollected = 0
 	
-	agent.loadQ()
-	agent.epsilon = 0.0
+	agent.loadQ()					# Load existing "model" (Q table)
+	agent.epsilon = 0.05				# Set random exploration to only 5%
 
 	while True:
-		state = tuple(detected)		# + (agent.nearEdge(),)
+		state = tuple(detected)			# State is a tuple of what every eye sees
 		action = agent.chooseAction(state)
-		if action == 0:
-			if not agent.atEdge():
+		if action == 0:				# Move straight forward
+			if not agent.atEdge():		# Unless we're at the edge
 				#agent.move(0.025)
 				smoothMove(delay)
-		elif action == 1:
+		elif action == 1:			# Turn 15 deg CCW then move forward
 			#agent.turn(15)
 			smoothTurn(15, delay)
 			if not agent.atEdge():
 				smoothMove(delay)
+				#agent.move(0.025)
 				prevAtEdge = False
 			else:
 				prevAtEdge = True
-		elif action == 2:
+		elif action == 2:			# Turn 15 deg CW then move forward
 			#agent.turn(-15)
 			smoothTurn(-15, delay)
 			if not agent.atEdge():
 				smoothMove(delay)
+				#agent.move(0.025)
 				prevAtEdge = False
 			else:
 				prevAtEdge = True
-		elif action == 3:
+		elif action == 3:			# Turn 30 deg CCW then forward a little
 			#agent.turn(30)
 			smoothTurn(30, delay)
 			if not agent.atEdge():
@@ -286,7 +315,7 @@ def play(delay):
 				prevAtEdge = False
 			else:
 				prevAtEdge = True
-		elif action == 4:
+		elif action == 4:			# Turn 30 deg CW then forward a little
 			#agent.turn(-30)
 			smoothTurn(-30, delay)
 			if not agent.atEdge():
@@ -297,6 +326,7 @@ def play(delay):
 	
 		absorbed = dotAbsorbed()
 
+		# "generate" new dot by moving absorbed dot (instead of deleting a creating a new one)
 		for dot in absorbed:
 			if (dots[dot].get_facecolor()[0] == 0.0):
 				greenCollected += 1
@@ -310,19 +340,21 @@ def play(delay):
 		
 		detected = dotDetected()
 	
+		# Change color of eyes depending on what they see
 		for i in range(agent.numEyes):
-			if detected[i] == 0:
+			if detected[i] == 0:				# nothing
 				agent.eyesPlot[i].set_color('black')
-			elif detected[i] == 1:
+			elif detected[i] == 1:				# green dot
 				agent.eyesPlot[i].set_color('green')
-			elif detected[i] == 2:
+			elif detected[i] == 2:				# red dot
 				agent.eyesPlot[i].set_color('red')
-			elif detected[i] == 3:
+			elif detected[i] == 3:				# edge
 				agent.eyesPlot[i].set_color('yellow')
 
 		fig.canvas.draw()
 		plt.pause(delay / 2)
-	
+
+		# Relocate dots that have been sitting in place for too long
 		for i in range(len(dotAges)):
 			if dotAges[i] > 2500 and age % 100 == 0 and random.random() < 0.05:
 				x, y = genRandPt(dots)
@@ -349,12 +381,8 @@ if __name__ == "__main__":
 	parser.add_argument("-i", "--iterations", help="Number of iterations to train before saving a model", required=False, type=int, default=50000)
 	args = vars(parser.parse_args())
 
+	# Set up "field" in matplotlib
 	fig, ax = plt.subplots(1, 1)
-	print("Generating world")
-	dots = create_world()
-	dotAges = [0]*len(dots)
-	agent = Agent.Agent(ax)
-
 	ax.set_aspect('equal')
 	plt.ylim([0, 1])
 	plt.xlim([0, 1])
@@ -363,10 +391,17 @@ if __name__ == "__main__":
 	ax.set_yticklabels([])
 	ax.set_xticklabels([])
 
+	# Generate green/red dots and initialize agent
+	print("Generating world")
+	dots = create_world()
+	dotAges = [0]*len(dots)
+	agent = Agent.Agent(ax)
+
 	mode = args['mode']
 	speed = args['speed']
 	iters = args['iterations']
 
+	# Delay between frames in seconds
 	timeDelays = [0.5, 0.2, 0.1, 0.05, 0.01]
 	delay = timeDelays[speed - 1]
 
@@ -380,9 +415,3 @@ if __name__ == "__main__":
 			play(delay)
 		except KeyboardInterrupt:
 			print("User ended session.")
-
-	
-
-
-
-

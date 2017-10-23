@@ -9,7 +9,7 @@ The blue circle is the q-learning agent. The agent has five "eyes" angle 15 degr
 
 The agent can perform five different actions: move straight forward, turn a little to the left and move forward, turn a little to the right and move forward, turn more to the left and move forward a little, or turn more to the right and move forward a little.
 
-The agent is reward for eating green dots, moving straight forward, and moving away from the edges. The agent is penalized for eating red dots, moving too close to the edge, and hitting the edge.
+The agent is rewarded for eating green dots, moving straight forward, and moving away from the edges. The agent is penalized for eating red dots, moving too close to the edge, and hitting the edge.
 
 Eventually, the agent learns which actions are "good" based on its current state and chooses actions it thinks is best based on both immediate and future rewards it will get from performing said action.
 

@@ -12,11 +12,19 @@ class Agent():
 		self.center = self.circle.center
 		self.numEyes = 5
 		self.viewDist = 0.2
-		self.eyes = [[self.center[0], self.center[0] - (self.viewDist/2), self.center[1], self.center[1] + 0.866*self.viewDist],
-				[self.center[0], self.center[0] - (self.viewDist * 0.259), self.center[1], self.center[1] + 0.966*self.viewDist],
-				[self.center[0], self.center[0], self.center[1], self.center[1] + self.viewDist],
-				[self.center[0], self.center[0] + (self.viewDist * 0.259), self.center[1], self.center[1] + 0.966*self.viewDist],
-				[self.center[0], self.center[0] + (self.viewDist/2), self.center[1], self.center[1] + 0.866*self.viewDist]]
+		self.viewAngle = 60.0 / (self.numEyes - 1)
+		self.eyes = []
+		for i in range(self.numEyes):
+			eyeAngle = (-30.0 + i * self.viewAngle) * math.pi / 180
+			self.eyes.append([self.center[0],
+					self.center[0] + math.sin(eyeAngle) * self.viewDist,
+					self.center[1],
+					self.center[1] + math.cos(eyeAngle) * self.viewDist])
+		#self.eyes = [[self.center[0], self.center[0] - (self.viewDist/2), self.center[1], self.center[1] + 0.866*self.viewDist],
+		#		[self.center[0], self.center[0] - (self.viewDist * 0.259), self.center[1], self.center[1] + 0.966*self.viewDist],
+		#		[self.center[0], self.center[0], self.center[1], self.center[1] + self.viewDist],
+		#		[self.center[0], self.center[0] + (self.viewDist * 0.259), self.center[1], self.center[1] + 0.966*self.viewDist],
+		#		[self.center[0], self.center[0] + (self.viewDist/2), self.center[1], self.center[1] + 0.866*self.viewDist]]
 		self.axis = ax
 		self.angle = math.pi / 2
 		self.axis.add_artist(self.circle)
@@ -110,10 +118,10 @@ class Agent():
 		maxqnew = max([self.getQ(state2, a) for a in self.actions])
 		self.learnQ(state1, action1, reward, reward + self.gamma * maxqnew)
 
-	def saveQ(self):
-		with open('model.pkl', 'wb') as f:
+	def saveQ(self, filename):
+		with open(filename, 'wb') as f:
 			pickle.dump(self.q, f)
 
-	def loadQ(self):
-		with open('model.pkl', 'rb') as f:
+	def loadQ(self, filename):
+		with open(filename, 'rb') as f:
 			self.q = pickle.load(f)

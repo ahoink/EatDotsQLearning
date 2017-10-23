@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import random
 import math
 import argparse
+import warnings
 
 def create_world():
 # Generates 50 dots to be "randomly" placed on the field
@@ -156,7 +157,7 @@ def smoothTurn(angle, delay):
 	plt.pause(delay / 2)
 	agent.turn(float(angle) / 2)
 
-def train(delay, iters):
+def train(delay, iters, modelOut):
 # Learn based on rewards from states and actions
 
 	detected = dotDetected()
@@ -258,20 +259,17 @@ def train(delay, iters):
 
 		score += reward
 		age += 1
-		dcSum = 0
-		gcSum = 0
-		for i in range(5000):
-			dcSum += dotsCollected[i]
-			gcSum += greenCollected[i]
+		dcSum = sum(dotsCollected)
+		gcSum = sum(greenCollected)
 		if dcSum > 0:
 			fuzzScore = gcSum * 1.0 / dcSum
 		else:
 			fuzzScore = 0.0
 		plt.title("age=%d  ratio=%.3f  score=%d" % (age, fuzzScore, score))
 
-	agent.saveQ()
+	agent.saveQ(modelOut)
 
-def play(delay):
+def play(delay, modelIn):
 # No training or learning
 
 	detected = dotDetected()
@@ -279,7 +277,11 @@ def play(delay):
 	dotsCollected = 0
 	greenCollected = 0
 	
-	agent.loadQ()					# Load existing "model" (Q table)
+	try:
+		agent.loadQ(modelIn)			# Load existing "model" (Q table)
+	except:
+		print("Can't open model. Filename: %s" % modelIn)
+		return
 	agent.epsilon = 0.05				# Set random exploration to only 5%
 
 	while True:
@@ -378,14 +380,19 @@ if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
 	parser.add_argument("-m", "--mode", help="Mode is either 'train' to train a model or 'play' to load a trained model", required=False, default="train")
 	parser.add_argument("-s", "--speed", help="Control how fast the animation is between 1 (slowest) and 5 (fastest)", required=False, type=int, default=3)
-	parser.add_argument("-i", "--iterations", help="Number of iterations to train before saving a model", required=False, type=int, default=50000)
+	parser.add_argument("-n", "--num_iters", help="Number of iterations to train before saving a model", required=False, type=int, default=50000)
+	parser.add_argument("-i", "--input", help="Specify a filename/path to an existing model", required=False, default="model.pkl")
+	parser.add_argument("-o", "--output", help="Specify an output filename/path for the model being trained", required=False, default="model.pkl")
 	args = vars(parser.parse_args())
+	
+	# Ignore matplotlib deprecation warning - stackoverflow says this is the best fix for now
+	warnings.filterwarnings("ignore",".*GUI is implemented.*")
 
 	# Set up "field" in matplotlib
 	fig, ax = plt.subplots(1, 1)
 	ax.set_aspect('equal')
-	plt.ylim([0, 1])
-	plt.xlim([0, 1])
+	plt.ylim([0, 1.0])
+	plt.xlim([0, 1.0])
 	#plt.ion()
 	plt.show(block=False)
 	ax.set_yticklabels([])
@@ -399,7 +406,9 @@ if __name__ == "__main__":
 
 	mode = args['mode']
 	speed = args['speed']
-	iters = args['iterations']
+	iters = args['num_iters']
+	modelIn = args['input']
+	modelOut = args['output']
 
 	# Delay between frames in seconds
 	timeDelays = [0.5, 0.2, 0.1, 0.05, 0.01]
@@ -407,11 +416,17 @@ if __name__ == "__main__":
 
 	if mode == "train":
 		try:
-			train(delay, iters)
+			train(delay, iters, modelOut)
 		except KeyboardInterrupt:
 			print("User cancelled training. No model saved.")
+		except:
+			print("Unexpected error. No model saved.")
 	elif mode == "play":
+		if not modelOut == "model.pkl":
+			print("Notice: You don't need to specify an output file as it will not be used in this mode")
 		try:
-			play(delay)
+			play(delay, modelIn)
 		except KeyboardInterrupt:
 			print("User ended session.")
+		except:
+			print("Unexpected error. Session ended")

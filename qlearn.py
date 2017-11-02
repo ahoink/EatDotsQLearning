@@ -10,12 +10,14 @@ import warnings
 def create_world():
 # Generates 50 dots to be "randomly" placed on the field
 
+	gc = 0
 	dots = []
 	for i in range(50):
 		x, y = genRandPt(dots)
 		while x == y == -1:
 			x, y = genRandPt(dots)
-		dot = create_dot(x, y)
+		dot, gc = create_dot(x, y, gc)
+		
 		ax.add_artist(dot)
 		dots.append(dot)
 	return dots
@@ -34,19 +36,21 @@ def genRandPt(dots):
 			return -1, -1
 	return x, y
 
-def create_dot(x, y):
+def create_dot(x, y, gc):
 # Creates a dot at a specified point with a 60% chance of being green
 
-	if random.random() < 0.6:
+	if random.random() < 0.6 and gc < 30:
 		color = 'green'
+		gc += 1
 	else:
 		color = 'red'
 	dot = Circle((x, y), 0.015, color=color)
-	return dot
+	return dot, gc
 
 def dotDetected():
 # Finds what objects each eye can see but only returns the closest ones
 # 0 = nothing, 1 = green dot, 2 = red dot, 3 = edge
+
 	dist = [99] * agent.numEyes
 	detected = [0] * agent.numEyes
 	wall = agent.nearEdge()
@@ -93,6 +97,38 @@ def distToWall(eye):
 			dist = agent.viewDist - (eye[3] - ax.get_ylim()[1])
 		else:
 			dist = agent.viewDist - (eye[3] - ax.get_ylim()[1]) / math.cos(angle)
+	else:
+		dist = 99
+	return dist
+
+def maxMove(eye):
+# Finds maximum move distance possible before agent goes out of bounds
+# Only applies if agent is near edge (i.e. eyes can see beyond edge)
+
+	if eye[1] < 0:
+		angle = math.asin(min(abs(eye[1] - eye[0]) / agent.viewDist, 1))
+		if angle == 0:
+			dist = agent.viewDist - abs(eye[1])
+		else:
+			dist = (abs(eye[1] - eye[0]) - abs(eye[1]) - agent.circle.radius) / math.sin(angle)
+	elif eye[1] > ax.get_xlim()[1]:
+		angle = math.asin(min((eye[1] - eye[0]) / agent.viewDist, 1))
+		if angle == 0:
+			dist = agent.viewDist - (eye[1] - ax.get_xlim()[1])
+		else:
+			dist = ((eye[1] - eye[0]) - (eye[1] - ax.get_xlim()[1]) - agent.circle.radius) / math.sin(angle)
+	elif eye[3] < 0:
+		angle = math.acos(min(abs(eye[3] - eye[2]) / agent.viewDist, 1))
+		if angle == math.pi / 2:
+			dist = agent.viewDist - abs(eye[3])
+		else:
+			dist = (abs(eye[3] - eye[2]) - abs(eye[3]) - agent.circle.radius) / math.cos(angle)
+	elif eye[3] > ax.get_ylim()[1]:
+		angle = math.acos(min((eye[3] - eye[2]) / agent.viewDist, 1))
+		if angle == math.pi / 2:
+			dist = agent.viewDist - (eye[3] - ax.get_ylim()[1])
+		else:
+			dist = ((eye[3] - eye[2]) - (eye[3] - ax.get_ylim()[1]) - agent.circle.radius) / math.cos(angle)
 	else:
 		dist = 99
 	return dist
@@ -145,11 +181,11 @@ def dotAbsorbed():
 			absorbed.append(i)
 	return absorbed
 
-def smoothMove(delay):
-	agent.move(0.0125)
+def smoothMove(dist, delay):
+	agent.move(dist / 2)
 	fig.canvas.draw()
 	plt.pause(delay / 2)
-	agent.move(0.0125)
+	agent.move(dist / 2)
 
 def smoothTurn(angle, delay):
 	agent.turn(float(angle) / 2)
@@ -168,43 +204,66 @@ def train(delay, iters, modelOut):
 	age = 0						# Age is number of iterations (actions)
 	dotsCollected = [0]*5000			# Only track last 5000 iterations
 	greenCollected = [0]*5000
-	prevAtEdge = False
+	avgReward = [0.0] * 1000
+	midEye = int(agent.numEyes/2)
 
 	# Train for specific number of iterations
 	while age < iters:
 		state = tuple(detected)				# State is tuple of what every eye sees
 		action = agent.chooseAction(state)
 		reward = 0
-
+		agent.alpha = 1000.0 / (1000 + age)
 		if action == 0:					# Move straight forward
-			if not agent.atEdge():			# Only if we're not at an edge
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.025:			# Check if close to edge
 				agent.move(0.025)
-				if agent.nearEdge():
-					reward -= 0.1		# Decrease reward if close to edge
-				else:			
-					reward += 0.5		# Otherwise increase reward
-					if prevAtEdge:
-						reward += 0.25	# Bonus reward for moving away from edge
-				prevAtEdge = False
+				reward += 0.5			# Increase reward
+			elif moveDist > 0:			# Don't move beyond edge, lower reward for getting too close
+				agent.move(moveDist)
+				reward += 0.5 * (1 - (0.025 - wallDist))
 			else:
-				prevAtEdge = True
-				reward -= 1.0
+				reward -= 1.0				
 		elif action == 1:				# Turn 15 deg CCW then forward
 			agent.turn(15)
-			if not agent.atEdge():
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.025:
 				agent.move(0.025)
+			elif moveDist > 0:
+				agent.move(moveDist)
+			else:
+				reward -= 1.0
 		elif action == 2:				# Turn 15 deg CW then forward
 			agent.turn(-15)
-			if not agent.atEdge():
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.025:
 				agent.move(0.025)
+			elif moveDist > 0:
+				agent.move(moveDist)
+			else:
+				reward -= 1.0
 		elif action == 3:				# Turn 30 deg CCW then forward a little
 			agent.turn(30)
-			if not agent.atEdge():
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.01:
 				agent.move(0.01)
+			elif moveDist > 0:
+				agent.move(moveDist)
+			else:
+				reward -= 1.0
 		elif action == 4:				# Turn 30 deg CW then forward a little
 			agent.turn(-30)
-			if not agent.atEdge():
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.01:
 				agent.move(0.01)
+			elif moveDist > 0:
+				agent.move(moveDist)
+			else:
+				reward -= 1.0
 	
 		absorbed = dotAbsorbed()
 		dotsCollected[age%5000] = 0
@@ -258,6 +317,7 @@ def train(delay, iters, modelOut):
 				dotAges[i] += 1
 
 		score += reward
+		avgReward[age%1000] = reward
 		age += 1
 		dcSum = sum(dotsCollected)
 		gcSum = sum(greenCollected)
@@ -265,7 +325,7 @@ def train(delay, iters, modelOut):
 			fuzzScore = gcSum * 1.0 / dcSum
 		else:
 			fuzzScore = 0.0
-		plt.title("age=%d  ratio=%.3f  score=%d" % (age, fuzzScore, score))
+		plt.title("age=%d  ratio=%.3f  score=%.2f" % (age, fuzzScore, sum(avgReward) * 1.0 / len(avgReward)))
 
 	agent.saveQ(modelOut)
 
@@ -273,58 +333,64 @@ def play(delay, modelIn):
 # No training or learning
 
 	detected = dotDetected()
-	age = 0						# Age is number of iterations (actions)
+	age = 0							# Age is number of iterations (actions)
 	dotsCollected = 0
 	greenCollected = 0
+	midEye = int(agent.numEyes/2)
 	
 	try:
-		agent.loadQ(modelIn)			# Load existing "model" (Q table)
+		agent.loadQ(modelIn)				# Load existing "model" (Q table)
 	except:
 		print("Can't open model. Filename: %s" % modelIn)
 		return
-	agent.epsilon = 0.05				# Set random exploration to only 5%
+	agent.epsilon = 0.00					# Set random exploration to only 5%
 
 	while True:
-		state = tuple(detected)			# State is a tuple of what every eye sees
+		state = tuple(detected)				# State is a tuple of what every eye sees
 		action = agent.chooseAction(state)
-		if action == 0:				# Move straight forward
-			if not agent.atEdge():		# Unless we're at the edge
-				#agent.move(0.025)
-				smoothMove(delay)
-		elif action == 1:			# Turn 15 deg CCW then move forward
+		if action == 0:					# Move straight forward
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.025:			# Check if at edge
+				smoothMove(0.025, delay)
+			elif moveDist > 0:
+				smoothMove(moveDist, delay)
+		elif action == 1:				# Turn 15 deg CCW then move forward
 			#agent.turn(15)
 			smoothTurn(15, delay)
-			if not agent.atEdge():
-				smoothMove(delay)
-				#agent.move(0.025)
-				prevAtEdge = False
-			else:
-				prevAtEdge = True
-		elif action == 2:			# Turn 15 deg CW then move forward
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[agent.numEyes/2])
+			if  moveDist >= 0.025:
+				smoothMove(0.025, delay)
+			elif moveDist > 0:
+				smoothMove(moveDist, delay)
+		elif action == 2:				# Turn 15 deg CW then move forward
 			#agent.turn(-15)
 			smoothTurn(-15, delay)
-			if not agent.atEdge():
-				smoothMove(delay)
-				#agent.move(0.025)
-				prevAtEdge = False
-			else:
-				prevAtEdge = True
-		elif action == 3:			# Turn 30 deg CCW then forward a little
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.025:
+				smoothMove(0.025, delay)
+			elif moveDist > 0:
+				smoothMove(moveDist, delay)
+		elif action == 3:				# Turn 30 deg CCW then forward a little
 			#agent.turn(30)
 			smoothTurn(30, delay)
-			if not agent.atEdge():
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.01:
 				agent.move(0.01)
-				prevAtEdge = False
-			else:
-				prevAtEdge = True
-		elif action == 4:			# Turn 30 deg CW then forward a little
+			elif moveDist > 0:
+				agent.move(moveDist)
+		elif action == 4:				# Turn 30 deg CW then forward a little
 			#agent.turn(-30)
 			smoothTurn(-30, delay)
-			if not agent.atEdge():
+			wallDist = distToWall(agent.eyes[midEye])
+			moveDist = maxMove(agent.eyes[midEye])
+			if  moveDist >= 0.01:
 				agent.move(0.01)
-				prevAtEdge = False
-			else:
-				prevAtEdge = True
+			elif moveDist > 0:
+				agent.move(moveDist)
 	
 		absorbed = dotAbsorbed()
 
@@ -391,8 +457,8 @@ if __name__ == "__main__":
 	# Set up "field" in matplotlib
 	fig, ax = plt.subplots(1, 1)
 	ax.set_aspect('equal')
-	plt.ylim([0, 1.0])
-	plt.xlim([0, 1.0])
+	plt.ylim([0, 1.25])
+	plt.xlim([0, 1.25])
 	#plt.ion()
 	plt.show(block=False)
 	ax.set_yticklabels([])
@@ -419,8 +485,8 @@ if __name__ == "__main__":
 			train(delay, iters, modelOut)
 		except KeyboardInterrupt:
 			print("User cancelled training. No model saved.")
-		except:
-			print("Unexpected error. No model saved.")
+		#except:
+		#	print("Unexpected error. No model saved.")
 	elif mode == "play":
 		if not modelOut == "model.pkl":
 			print("Notice: You don't need to specify an output file as it will not be used in this mode")
@@ -428,5 +494,5 @@ if __name__ == "__main__":
 			play(delay, modelIn)
 		except KeyboardInterrupt:
 			print("User ended session.")
-		except:
-			print("Unexpected error. Session ended")
+		#except:
+		#	print("Unexpected error. Session ended")

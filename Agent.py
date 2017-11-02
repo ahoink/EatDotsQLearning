@@ -8,7 +8,7 @@ import pickle
 class Agent():
 	
 	def __init__(self, ax):
-		self.circle = Circle((0.50, 0.50), 0.025, color='blue')
+		self.circle = Circle((ax.get_xlim()[1] / 2, ax.get_ylim()[1] / 2), 0.025, color='blue')
 		self.center = self.circle.center
 		self.numEyes = 5
 		self.viewDist = 0.2
@@ -20,11 +20,6 @@ class Agent():
 					self.center[0] + math.sin(eyeAngle) * self.viewDist,
 					self.center[1],
 					self.center[1] + math.cos(eyeAngle) * self.viewDist])
-		#self.eyes = [[self.center[0], self.center[0] - (self.viewDist/2), self.center[1], self.center[1] + 0.866*self.viewDist],
-		#		[self.center[0], self.center[0] - (self.viewDist * 0.259), self.center[1], self.center[1] + 0.966*self.viewDist],
-		#		[self.center[0], self.center[0], self.center[1], self.center[1] + self.viewDist],
-		#		[self.center[0], self.center[0] + (self.viewDist * 0.259), self.center[1], self.center[1] + 0.966*self.viewDist],
-		#		[self.center[0], self.center[0] + (self.viewDist/2), self.center[1], self.center[1] + 0.866*self.viewDist]]
 		self.axis = ax
 		self.angle = math.pi / 2
 		self.axis.add_artist(self.circle)
@@ -35,7 +30,7 @@ class Agent():
 
 		self.epsilon = 0.1	# exploration rate [0, 1] (higher means more random actions)
 		self.alpha = 0.2	# learning rate (0, 1] (higher means it forgets old info quicker)
-		self.gamma = 0.9	# Greediness [0,1] (lower means cares more about immediate rewards)
+		self.gamma = 0.7	# Greediness [0,1] (lower means cares more about immediate rewards)
 		self.q = {}
 		self.actions = [0, 1, 2, 3, 4] #forward, turn left little, turn right little, turn left more, turn right more
 	
